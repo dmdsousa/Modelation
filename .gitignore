@@ -1,0 +1,15 @@
+# Data: never committed. Raw extractions and every generated per-proponent
+# CSV contain personal financial records (pseudonymized, still personal data).
+data/
+*.csv
+
+# Notebook noise (outputs are cleared before commit: they embed real data)
+.ipynb_checkpoints/
+__pycache__/
+*.pyc
+
+# Tooling / OS
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+.venv/
