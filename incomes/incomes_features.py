@@ -230,7 +230,7 @@ def render_profile_text(features):
     sal, irs = features["avg_net_salary_6m"], features["irs_total_income"]
 
     if sal is not None:
-        head = (f"Rende cerca de {_eur(sal)}/mês líquidos (salário, média de 6 "
+        head = (f"Recebe cerca de {_eur(sal)}/mês líquidos (salário, média de 6 "
                 f"meses; último registo {features['last_salary_month']}).")
     elif features["avg_regular_income_6m"]:
         head = (f"Rendimento regular de {_eur(features['avg_regular_income_6m'])}"
@@ -287,8 +287,17 @@ def render_profile_text(features):
     if features["salary_vs_irs_ratio"] is not None:
         lines.append(f"  Coerência        salário bruto anualizado = "
                      f"{features['salary_vs_irs_ratio']:.2f}x o IRS")
-    lines.append(f"  Fontes           {features['n_income_sources']} de 5 "
-                 "(IRS, salário, Seg. Social, faturação, pensão)")
+    presentes = [nome for nome, tem in (
+        ("IRS", features["irs_total_income"] is not None),
+        ("salário", features["has_salary_data"]),
+        ("Seg. Social", features["has_ss_data"]),
+        ("faturação", features["has_invoices"]),
+        ("pensão", features["has_pension"])) if tem]
+    em_falta = [n for n in ("IRS", "salário", "Seg. Social", "faturação",
+                            "pensão") if n not in presentes]
+    lines.append(f"  Fontes           {features['n_income_sources']} de 5: "
+                 + (", ".join(presentes) or "nenhuma")
+                 + (f" (sem dados: {', '.join(em_falta)})" if em_falta else ""))
     lines.append("")
     lines.append("  IRS é anual e bruto (casais: ambos os titulares); salário é "
                  "mensal, líquido e só do proponente.")

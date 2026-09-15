@@ -229,10 +229,10 @@ def render_profile_text(features):
 
     certs = []
     if f["irs_cert_has_debts"] is not None:
-        certs.append(("COM dívidas" if f["irs_cert_has_debts"] else "limpa")
+        certs.append(("COM dívidas" if f["irs_cert_has_debts"] else "sem dívidas")
                      + f" à AT ({f['irs_cert_month']})")
     if f["ss_cert_has_debts"] is not None:
-        certs.append(("COM dívidas" if f["ss_cert_has_debts"] else "limpa")
+        certs.append(("COM dívidas" if f["ss_cert_has_debts"] else "sem dívidas")
                      + f" à Seg. Social ({f['ss_cert_month']})")
     if certs:
         lines.append(f"  Certidões        {'; '.join(certs)}")

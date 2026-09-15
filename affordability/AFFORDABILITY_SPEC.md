@@ -1,4 +1,4 @@
-# Affordability Synthesis v1.2.0
+# Affordability Synthesis v1.4.0
 
 Contract for the affordability-synthesis vector and the unified proponent
 report. Reference implementation: `affordability_features.py` (stdlib-only
@@ -54,6 +54,8 @@ ADVERSOS, RENDIMENTO, EMPREGO, RESPONSABILIDADES, BANCA, DESPESAS.
 | `expenses_floor` | Recurring invoiced monthly spend (expenses vector) |
 | `committed_outgoings` | `debt_service + rent_monthly` (contractual) |
 | `dsti` | `debt_service / monthly_income` |
+| `effort_rate` | `(debt_service + rent_monthly) / monthly_income`: taxa de esforço, contractual commitments only (v1.4.0) |
+| `irs_is_joint`, `n_dependents` | Household context carried from siblings: joint declaration flag, dependents count (v1.4.0) |
 | `rent_to_income` | `rent_monthly / monthly_income` |
 | `total_outgoings_floor`, `burden_ratio` | Commitments + expenses floor; as share of income |
 | `residual_income`, `residual_ratio` | What remains, EUR and share |

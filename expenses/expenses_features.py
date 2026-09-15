@@ -296,16 +296,17 @@ def render_profile_text(features):
     cv = features["monthly_cv"]
     if cv is not None:
         word = "rígida" if cv < 0.35 else ("típica" if cv < 0.6 else "irregular")
-        lines.append(f"  Volatilidade      {cv:.2f} ({word})")
+        lines.append(f"  Volatilidade      {cv:.0%} ({word})")
     if features["expenses_over_1000_total"]:
         lines.append(f"  Compras avultadas {_eur(features['expenses_over_1000_total'])} "
                      f"no total ({_n(features['expenses_over_1000_count'], 'fatura', 'faturas')} "
                      ">= 1.000 EUR)")
     lines.append("")
-    lines.append("  Como ler: só conta despesa com fatura (e-fatura); a renda "
-                 "aparece em linha própria quando há contrato registado; "
-                 "contas de serviços e prestações de crédito ficam de fora, "
-                 "pelo que o gasto real é superior ao indicado.")
+    lines.append("  Como ler: só conta despesa comunicada ao e-fatura; a "
+                 "renda aparece em linha própria quando há contrato "
+                 "registado; prestações de crédito, transferências e compras "
+                 "sem fatura ficam de fora, pelo que o gasto real é superior "
+                 "ao indicado.")
     return "\n".join(lines)
 
 

@@ -55,7 +55,7 @@ from liabilities_features import render_profile_text as _t_liab  # noqa: E402
 from semaforo_features import semaforo, semaforo_features         # noqa: E402
 from semaforo_features import render_semaforo_text                # noqa: E402
 
-FEATURES_VERSION = "1.3.0"
+FEATURES_VERSION = "1.4.0"
 
 
 def _dig(d, *path):
@@ -109,6 +109,7 @@ def affordability_features(profile, vectors=None):
     # ---------- ratios ----------
     if income and income > 0:
         out["dsti"] = _round((debt_service or 0) / income, 3)
+        out["effort_rate"] = _round(committed / income, 3)
         out["rent_to_income"] = (_round(rent / income, 3)
                                  if rent is not None else None)
         floor = out["expenses_floor"]
@@ -123,8 +124,9 @@ def affordability_features(profile, vectors=None):
                       "residual_ratio", "burden_ratio"):
                 out[f] = None
     else:
-        for f in ("dsti", "rent_to_income", "total_outgoings_floor",
-                  "residual_income", "residual_ratio", "burden_ratio"):
+        for f in ("dsti", "effort_rate", "rent_to_income",
+                  "total_outgoings_floor", "residual_income",
+                  "residual_ratio", "burden_ratio"):
             out[f] = None
 
     # ---------- carried context (provenance stays in the siblings) ----------
@@ -138,12 +140,16 @@ def affordability_features(profile, vectors=None):
     out["expenses_cv"] = exp["monthly_cv"]
     out["employer_active"] = empl["employer_active"]
     out["tenure_months"] = empl["tenure_months"]
+    # household: decisive context for reading the ratios
+    out["irs_is_joint"] = inc["irs_is_joint"]
+    out["n_dependents"] = exp["n_dependents"]
     return out
 
 
 HEADLINE_FIELDS = [
     "monthly_income", "income_basis", "debt_service", "rent_monthly",
-    "expenses_floor", "dsti", "burden_ratio", "residual_income",
+    "expenses_floor", "dsti", "effort_rate", "burden_ratio",
+    "residual_income", "irs_is_joint", "n_dependents",
     "income_verification", "any_adverse", "in_default_now",
     "n_consistency_flags",
 ]
@@ -223,6 +229,13 @@ def render_profile_text(features):
 
     lines.append(f"  Rendimento       {_eur(f['monthly_income'])}/mês "
                  f"({BASIS_PT[f['income_basis']]})")
+    if f["irs_is_joint"] is not None:
+        agregado = ("declaração conjunta (2 titulares)" if f["irs_is_joint"]
+                    else "titular único")
+        nd = f["n_dependents"] or 0
+        agregado += (", sem dependentes" if nd == 0 else
+                     f", {nd} dependente" + ("s" if nd > 1 else ""))
+        lines.append(f"  Agregado         {agregado}")
     ds = f"  Créditos         {_eur(f['debt_service'])}/mês em prestações"
     if f["dsti"] is not None:
         ds += f", ou seja {f['dsti']:.0%} do rendimento (DSTI)"
@@ -232,6 +245,9 @@ def render_profile_text(features):
         if f["rent_to_income"] is not None:
             rt += f" ({f['rent_to_income']:.0%} do rendimento)"
         lines.append(rt)
+    if f["effort_rate"] is not None:
+        lines.append(f"  Taxa de esforço  {f['effort_rate']:.0%} do rendimento "
+                     "em compromissos contratuais (créditos + renda)")
     if f["expenses_floor"] is not None:
         lines.append(f"  Despesas         pelo menos "
                      f"{_eur(f['expenses_floor'])}/mês (conta apenas o que "
@@ -251,12 +267,13 @@ def render_profile_text(features):
                      "que a pessoa terá de pagar SE o devedor principal "
                      "falhar (não contado acima)")
     lines.append("")
-    lines.append("  Como ler: as despesas contam só o que tem fatura (ficam "
-                 "de fora água, luz, seguros e compras sem NIF), por isso o "
-                 "que sobra na realidade é MENOS do que o indicado. E "
-                 "atenção à fonte do rendimento: salário líquido individual "
-                 "e IRS bruto do agregado dão percentagens que não se podem "
-                 "comparar diretamente entre pessoas.")
+    lines.append("  Como ler: as despesas contam só o que foi comunicado ao "
+                 "e-fatura (prestações de crédito, transferências e compras "
+                 "sem fatura ficam de fora), por isso o que sobra na "
+                 "realidade é MENOS do que o indicado. E atenção à fonte do "
+                 "rendimento: salário líquido individual e IRS bruto do "
+                 "agregado dão percentagens que não se podem comparar "
+                 "diretamente entre pessoas.")
     return "\n".join(lines)
 
 

@@ -513,10 +513,6 @@ def render_profile_text(features):
         line += f" | bloqueadas: {', '.join(blocked)}"
     lines.append(line)
 
-    lines.append("")
-    lines.append("  O acesso à Seg. Social é uma limitação de dados, não uma "
-                 "característica da pessoa; a ausência de fontes situacionais "
-                 "é, quando muito, fracamente descritiva.")
     return "\n".join(lines)
 
 
