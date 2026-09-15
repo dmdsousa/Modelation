@@ -33,7 +33,7 @@ import sys
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 for _sib in ("expenses", "liabilities", "incomes", "completeness",
-             "employment", "adverse", "banking"):
+             "employment", "adverse", "banking", "semaforo"):
     _p = os.path.join(_HERE, "..", _sib)
     if _p not in sys.path:
         sys.path.insert(0, _p)
@@ -52,8 +52,10 @@ from incomes_features import income_features                     # noqa: E402
 from incomes_features import render_profile_text as _t_inc       # noqa: E402
 from liabilities_features import liability_features              # noqa: E402
 from liabilities_features import render_profile_text as _t_liab  # noqa: E402
+from semaforo_features import semaforo, semaforo_features         # noqa: E402
+from semaforo_features import render_semaforo_text                # noqa: E402
 
-FEATURES_VERSION = "1.2.0"
+FEATURES_VERSION = "1.3.0"
 
 
 def _dig(d, *path):
@@ -269,21 +271,33 @@ SECTION_ORDER = [
 ]
 
 
+SEMAFORO_KEY = {"SÍNTESE (AFFORDABILITY)": "sintese", "DADOS": "dados",
+                "REGISTOS ADVERSOS": "adversos", "RENDIMENTO": "rendimento",
+                "EMPREGO": "emprego", "RESPONSABILIDADES": "responsabilidades",
+                "BANCA": "banca", "DESPESAS": "despesas"}
+
+
 def proponent_profile(profile):
-    """All seven vectors for one snapshot: {'affordability': ..., ...}."""
+    """All package vectors for one snapshot, plus the semaforo."""
     vectors = {name: build(profile)
                for _, name, _, build in SECTION_ORDER}
     vectors["affordability"] = affordability_features(profile, vectors)
+    vectors["semaforo"] = semaforo_features(vectors)
     return vectors
 
 
 def render_full_report(profile, vectors=None):
-    """The complete pt-PT analysis: synthesis first, then each package."""
+    """The complete pt-PT analysis: semaforo, synthesis, then each package."""
     v = vectors or proponent_profile(profile)
-    parts = ["================ SÍNTESE (AFFORDABILITY) ================",
+    st = semaforo({k: v[k] for k in v if k != "semaforo"})
+    parts = ["================ SEMÁFORO ================",
+             render_semaforo_text(st),
+             "================ SÍNTESE (AFFORDABILITY): "
+             f"{st['sintese']['cor']} ================",
              render_profile_text(v["affordability"])]
     for title, name, render, _ in SECTION_ORDER:
-        parts.append(f"================ {title} ================")
+        cor = st[SEMAFORO_KEY[title]]["cor"]
+        parts.append(f"================ {title}: {cor} ================")
         parts.append(render(v[name]))
     return "\n\n".join(parts)
 

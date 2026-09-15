@@ -18,7 +18,8 @@ columns, six pt-PT text blocks per person).
 | employment/ | 1.0.0 | tenure, employer status, salary growth/continuity, terminations | 71 with main employer no longer active; 86 terminations in last 24m |
 | adverse/ | 1.0.0 | certificates, executions, role-resolved insolvencies, public debts | 57 (10.1%) with markers; adverse and CRC defaults are complementary channels (47 vs 83 non-overlap) |
 | banking/ | 1.0.0 | account mix, relationship age, institution spread, recent openings; only open accounts visible | median relationship 13.8 years; 207 with savings, 165 with investments; 471 opened credit facilities in last 12m |
-| affordability/ | 1.2.0 | synthesis: income basis, commitments incl. rent, expenses floor, residual; proponent_profile() and the unified pt-PT report | median residual -177 EUR (60% negative): read with the household-vs-individual basis caveat |
+| affordability/ | 1.3.0 | synthesis: income basis, commitments incl. rent, expenses floor, residual; proponent_profile() and the unified pt-PT report (SEMÁFORO block + colored section headers) | median residual -177 EUR (60% negative): read with the household-vs-individual basis caveat |
+| semaforo/ | 1.0.0 | per-section triage colors: absolute hard rules + population-relative P75/P90 cuts (frozen benchmarks); reasons in pt-PT; CINZENTO never penalizes gated absence | every section discriminates: e.g. síntese 217/256/75/17 (V/A/V/C); no aggregate color by design |
 
 ## Next steps (recommended order)
 
