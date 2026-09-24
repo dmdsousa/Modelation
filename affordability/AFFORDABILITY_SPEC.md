@@ -1,4 +1,4 @@
-# Affordability Synthesis v1.4.0
+# Affordability Synthesis v1.5.0
 
 Contract for the affordability-synthesis vector and the unified proponent
 report. Reference implementation: `affordability_features.py` (stdlib-only
@@ -70,6 +70,19 @@ ADVERSOS, RENDIMENTO, EMPREGO, RESPONSABILIDADES, BANCA, DESPESAS.
   an ATENÇÃO suffix when adverse records or active CRC default exist.
 - `render_full_report(profile)`: SÍNTESE plus the six package texts under
   section headers: the beta's complete per-proponent payload.
+
+## Observability (v1.5.0)
+
+`observability_features(profile, vectors)` produces the per-result production
+metadata, rendered as the closing OBSERVABILIDADE section of every full
+report and exported as `observability_*` columns: `generated_at`,
+`input_sha256` (fingerprint of the snapshot), `process_start` and
+`data_anchor_month`, `versions` (every package version used), the frozen
+`reference_base`, `income_basis` with the reason, which comparisons were
+possible (`pares_grupo`, `vizinhos`), per-package null coverage
+(`nulos_<package>` + `cobertura`), the section-color summary, and the
+analyses the snapshot supports. Purely descriptive: none of it feeds any
+calculation.
 
 ## Population reference (data_full.csv, 565 proponents)
 

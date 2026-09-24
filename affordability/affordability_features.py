@@ -28,8 +28,11 @@ Still optimistic: utilities and non-invoiced spend remain unobserved.
 Stdlib only.
 """
 
+import hashlib
+import json as _json
 import os
 import sys
+from datetime import datetime, timezone
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 for _sib in ("expenses", "liabilities", "incomes", "completeness",
@@ -55,7 +58,7 @@ from liabilities_features import render_profile_text as _t_liab  # noqa: E402
 from semaforo_features import semaforo, semaforo_features         # noqa: E402
 from semaforo_features import render_semaforo_text                # noqa: E402
 
-FEATURES_VERSION = "1.4.0"
+FEATURES_VERSION = "1.5.0"
 
 
 def _dig(d, *path):
@@ -288,6 +291,94 @@ SECTION_ORDER = [
 ]
 
 
+PACKAGES_FOR_COVERAGE = ["completeness", "adverse", "incomes", "employment",
+                         "liabilities", "banking", "expenses",
+                         "affordability"]
+
+
+def observability_features(profile, vectors):
+    """Metadados de produção do resultado: o COMO por trás do output.
+
+    Tudo factual e por proponente: fingerprint do input, versões de cada
+    pacote, base de referência das comparações, base de rendimento escolhida
+    e porquê, comparações possíveis (pares/vizinhos), cobertura de campos
+    por pacote, e o resumo de cores. Serve auditoria, debugging e leitura
+    crítica do output; não altera nenhum cálculo."""
+    out = {}
+    out["generated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    out["input_sha256"] = hashlib.sha256(
+        _json.dumps(profile, sort_keys=True, ensure_ascii=False)
+        .encode()).hexdigest()[:16]
+    out["process_start"] = (_dig(profile, "ProcessInformation",
+                                 "StartDateTime") or "")[:19] or None
+    comp, inc, sf = (vectors["completeness"], vectors["incomes"],
+                     vectors["semaforo"])
+    out["data_anchor_month"] = comp["data_anchor_month"]
+    out["versions"] = "; ".join(
+        f"{name} {vectors[name]['features_version']}"
+        for name in PACKAGES_FOR_COVERAGE) + f"; semaforo {sf['features_version']}"
+    out["reference_base"] = ("data_full.csv, 565 proponentes; grelhas/pares/"
+                             "vizinhos congelados 2026-09-24; cortes de cor "
+                             "P75/P90 de 2026-09-15")
+    a = vectors["affordability"]
+    fontes = [n for n, tem in (("salário", inc["has_salary_data"]),
+                               ("Seg. Social", inc["has_ss_data"]),
+                               ("IRS", inc["irs_total_income"] is not None))
+              if tem]
+    out["income_basis"] = a["income_basis"]
+    out["income_basis_porque"] = (f"prioridade salário>SS>IRS; presentes: "
+                                  + (", ".join(fontes) or "nenhuma"))
+    out["pares_grupo"] = sf["pares_grupo"] or "sem grupo de pares aplicável"
+    out["vizinhos"] = (f"{sf['vizinhos_k']} vizinhos (base {a['income_basis']})"
+                       if sf["vizinhos_k"] else
+                       "sem vizinhos: faltam rendimento, idade, dívida ou despesa")
+    cobertura = []
+    for name in PACKAGES_FOR_COVERAGE:
+        vec = vectors[name]
+        total = len(vec) - 1
+        nulos = sum(1 for k, v2 in vec.items()
+                    if k != "features_version" and v2 is None)
+        cobertura.append(f"{name} {nulos}/{total} nulos")
+        out[f"nulos_{name}"] = nulos
+    out["cobertura"] = "; ".join(cobertura)
+    cores = [sf[f"{sec}_cor"] for sec in ("sintese", "dados", "adversos",
+                                          "rendimento", "emprego",
+                                          "responsabilidades", "banca",
+                                          "despesas")]
+    out["cores_resumo"] = (f"{cores.count('VERMELHO')} VERMELHO, "
+                           f"{cores.count('AMARELO')} AMARELO, "
+                           f"{cores.count('VERDE')} VERDE, "
+                           f"{cores.count('CINZENTO')} CINZENTO")
+    possiveis = [n for n, ok in (("despesas", comp["can_expenses_profile"]),
+                                 ("responsabilidades", comp["can_liabilities_profile"]),
+                                 ("verificação salarial", comp["can_salary_verification"]),
+                                 ("DSTI", comp["can_dsti"]),
+                                 ("affordability completa", comp["can_full_affordability"]))
+                 if ok]
+    out["analises_possiveis"] = ", ".join(possiveis) or "nenhuma"
+    return out
+
+
+def render_observability_text(obs):
+    """Secção OBSERVABILIDADE do relatório (pt-PT)."""
+    lines = [
+        f"  Gerado           {obs['generated_at']} | input sha256 {obs['input_sha256']}",
+        f"  Processo         início {obs['process_start'] or 'n/d'}; dados até {obs['data_anchor_month'] or 'n/d'}",
+        f"  Versões          {obs['versions']}",
+        f"  Base referência  {obs['reference_base']}",
+        f"  Base rendimento  {obs['income_basis']} ({obs['income_basis_porque']})",
+        f"  Comparações      pares: {obs['pares_grupo']}; vizinhos: {obs['vizinhos']}",
+        f"  Cobertura        {obs['cobertura']}",
+        f"  Cores            {obs['cores_resumo']}",
+        f"  Análises         {obs['analises_possiveis']}",
+        "",
+        "  Estes campos descrevem como o resultado foi produzido: versões, "
+        "base de comparação e densidade de dados; não entram em nenhum "
+        "cálculo.",
+    ]
+    return "\n".join(lines)
+
+
 SEMAFORO_KEY = {"SÍNTESE (AFFORDABILITY)": "sintese", "DADOS": "dados",
                 "REGISTOS ADVERSOS": "adversos", "RENDIMENTO": "rendimento",
                 "EMPREGO": "emprego", "RESPONSABILIDADES": "responsabilidades",
@@ -300,6 +391,7 @@ def proponent_profile(profile):
                for _, name, _, build in SECTION_ORDER}
     vectors["affordability"] = affordability_features(profile, vectors)
     vectors["semaforo"] = semaforo_features(vectors)
+    vectors["observability"] = observability_features(profile, vectors)
     return vectors
 
 
@@ -317,6 +409,9 @@ def render_full_report(profile, vectors=None):
         cor = st[SEMAFORO_KEY[title]]["cor"]
         parts.append(f"================ {title}: {cor} ================")
         parts.append(render(v[name]))
+    obs = v.get("observability") or observability_features(profile, v)
+    parts.append("================ OBSERVABILIDADE ================")
+    parts.append(render_observability_text(obs))
     return "\n\n".join(parts)
 
 
