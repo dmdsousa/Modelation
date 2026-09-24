@@ -29,7 +29,7 @@ Stdlib only. Consumidor: affordability/render_full_report (cabeçalhos e
 bloco SEMÁFORO).
 """
 
-FEATURES_VERSION = "1.0.0"
+FEATURES_VERSION = "1.1.0"
 
 # Percentis da população de referência: data_full.csv, 565 proponentes,
 # congelados em 2026-09-15. n por métrica varia (ver spec).
@@ -48,6 +48,39 @@ BENCHMARKS = {
 
 VERDE, AMARELO, VERMELHO, CINZENTO = "VERDE", "AMARELO", "VERMELHO", "CINZENTO"
 
+# Posicionamento contra a base (v1.1.0): grelhas completas de percentis,
+# geradas em population_grids.py. Metricas de rendimento comparam-se dentro
+# da mesma income_basis; sem grelha aplicavel, a posicao fica omissa.
+from population_grids import GRIDS, GRID_POINTS  # noqa: E402
+
+
+def percentile_rank(value, key):
+    """Percentil (0-100, interpolado) de `value` na grelha `key`; None se
+    a grelha nao existir ou o valor for None."""
+    grid = GRIDS.get(key)
+    if grid is None or value is None:
+        return None
+    if value <= grid[0]:
+        return 0
+    if value >= grid[-1]:
+        return 100
+    for i in range(1, len(grid)):
+        if value <= grid[i]:
+            lo, hi = grid[i - 1], grid[i]
+            frac = 0.0 if hi == lo else (value - lo) / (hi - lo)
+            return round(GRID_POINTS[i - 1]
+                         + frac * (GRID_POINTS[i] - GRID_POINTS[i - 1]))
+    return 100
+
+
+def _eur0(v):
+    return f"{v:,.0f}".replace(",", ".") + " EUR"
+
+
+def _pos(label, shown, value, key):
+    p = percentile_rank(value, key)
+    return None if p is None else f"{label} {shown} = P{p}"
+
 CONFIRMED_ADVERSE = {"at_debt_certificate", "ss_debt_certificate",
                      "debt_executions", "insolvency_confirmed",
                      "public_debts"}
@@ -56,8 +89,9 @@ SECTIONS = ["sintese", "dados", "adversos", "rendimento", "emprego",
             "responsabilidades", "banca", "despesas"]
 
 
-def _status(cor, razoes):
-    return {"cor": cor, "razoes": razoes}
+def _status(cor, razoes, posicao=None):
+    return {"cor": cor, "razoes": razoes,
+            "posicao": [x for x in (posicao or []) if x]}
 
 
 def _sintese(a):
@@ -80,7 +114,20 @@ def _sintese(a):
         if a["dsti"] is not None and a["dsti"] >= BENCHMARKS["dsti_p75"]:
             cor = AMARELO
             razoes.append(f"DSTI {a['dsti']:.0%}: pior que 75% da população")
-    return _status(cor, razoes or ["carga e sobra dentro do comum"])
+    basis = a["income_basis"]
+    posicao = [
+        _pos("carga", f"{a['burden_ratio']:.0%}" if a["burden_ratio"] is not None else "",
+             a["burden_ratio"], f"burden_ratio__{basis}"),
+        _pos("DSTI", f"{a['dsti']:.0%}" if a["dsti"] is not None else "",
+             a["dsti"], f"dsti__{basis}"),
+        _pos("esforço", f"{a['effort_rate']:.0%}" if a["effort_rate"] is not None else "",
+             a["effort_rate"], f"effort_rate__{basis}"),
+        _pos("sobra", _eur0(a["residual_income"]) if a["residual_income"] is not None else "",
+             a["residual_income"], f"residual_income__{basis}"),
+    ]
+    if any(posicao):
+        posicao.append(f"(base {basis})")
+    return _status(cor, razoes or ["carga e sobra dentro do comum"], posicao)
 
 
 def _dados(c):
@@ -135,7 +182,21 @@ def _rendimento(i, c):
         cor = AMARELO
         razoes.append(f"{i['variable_income_share_6m']:.0%} do salário é "
                       "variável: acima de 90% da população")
-    return _status(cor, razoes or ["rendimento verificado e estável"])
+    basis = None
+    if i["avg_net_salary_6m"]:
+        basis, val = "salary_net", i["avg_net_salary_6m"]
+    elif i["monthly_income_irs"] and not i["avg_regular_income_6m"]:
+        basis, val = "irs_gross", i["monthly_income_irs"]
+    posicao = []
+    if basis:
+        posicao.append(_pos("rendimento", f"{_eur0(val)}/mês", val,
+                            f"monthly_income__{basis}"))
+        if posicao[-1]:
+            posicao[-1] += f" (base {basis})"
+    posicao.append(_pos("evolução",
+                        f"{i['irs_yoy_growth']:+.0%}" if i["irs_yoy_growth"] is not None else "",
+                        i["irs_yoy_growth"], "irs_yoy"))
+    return _status(cor, razoes or ["rendimento verificado e estável"], posicao)
 
 
 def _emprego(e):
@@ -160,7 +221,9 @@ def _emprego(e):
             cor = AMARELO
             razoes.append(f"{e['salary_gap_months']} meses em falta na série "
                           "de salários")
-    return _status(cor, razoes or ["emprego estável"])
+    posicao = [_pos("antiguidade", f"{e['tenure_months']} meses" if e["tenure_months"] is not None else "",
+                    e["tenure_months"], "tenure_months")]
+    return _status(cor, razoes or ["emprego estável"], posicao)
 
 
 def _responsabilidades(liab):
@@ -184,7 +247,17 @@ def _responsabilidades(liab):
         if liab["guarantor_exposure"]:
             cor = AMARELO
             razoes.append("exposição contingente como avalista")
-    return _status(cor, razoes or ["dívida servida sem sinais de tensão"])
+    posicao = [
+        _pos("dívida", _eur0(liab["total_debt"]) if liab["total_debt"] is not None else "",
+             liab["total_debt"], "total_debt"),
+        _pos("prestações", f"{_eur0(liab['total_installment'])}/mês" if liab["total_installment"] is not None else "",
+             liab["total_installment"], "debt_service"),
+        _pos("revolving", f"{liab['revolving_debt_share']:.0%}" if liab["revolving_debt_share"] is not None else "",
+             liab["revolving_debt_share"], "revolving_share"),
+        _pos("novos 12m", str(liab["n_opened_12m"]) if liab["n_opened_12m"] is not None else "",
+             liab["n_opened_12m"], "crc_opened_12m"),
+    ]
+    return _status(cor, razoes or ["dívida servida sem sinais de tensão"], posicao)
 
 
 def _banca(b):
@@ -195,7 +268,13 @@ def _banca(b):
         cor = AMARELO
         razoes.append(f"{b['n_credit_opened_12m']} aberturas de crédito em "
                       "12 meses: acima de 90% da população")
-    return _status(cor, razoes or ["pegada bancária sem sinais de tensão"])
+    posicao = [
+        _pos("antiguidade", f"{b['oldest_account_years']:.0f} anos" if b["oldest_account_years"] is not None else "",
+             b["oldest_account_years"], "oldest_account_years"),
+        _pos("aberturas 12m", str(b["n_credit_opened_12m"]) if b["n_credit_opened_12m"] is not None else "",
+             b["n_credit_opened_12m"], "bank_credit_12m"),
+    ]
+    return _status(cor, razoes or ["pegada bancária sem sinais de tensão"], posicao)
 
 
 def _despesas(e):
@@ -213,7 +292,13 @@ def _despesas(e):
     if (e["months_observed"] or 0) < 6 and e["has_spend_data"]:
         cor = AMARELO
         razoes.append(f"apenas {e['months_observed']} meses observados")
-    return _status(cor, razoes or ["padrão de despesa dentro do comum"])
+    posicao = [
+        _pos("despesa", f"{_eur0(e['monthly_expenses'])}/mês" if e["monthly_expenses"] is not None else "",
+             e["monthly_expenses"], "monthly_expenses"),
+        _pos("volatilidade", f"{e['monthly_cv']:.0%}" if e["monthly_cv"] is not None else "",
+             e["monthly_cv"], "monthly_cv"),
+    ]
+    return _status(cor, razoes or ["padrão de despesa dentro do comum"], posicao)
 
 
 def semaforo(vectors):
@@ -237,6 +322,7 @@ def semaforo_features(vectors):
     for name in SECTIONS:
         out[f"{name}_cor"] = st[name]["cor"]
         out[f"{name}_razoes"] = "; ".join(st[name]["razoes"])
+        out[f"{name}_posicao"] = "; ".join(st[name].get("posicao") or []) or None
     out["n_vermelhos"] = sum(1 for s in st.values() if s["cor"] == VERMELHO)
     out["n_amarelos"] = sum(1 for s in st.values() if s["cor"] == AMARELO)
     return out
@@ -257,9 +343,12 @@ def render_semaforo_text(statuses):
         s = statuses[name]
         lines.append(f"  {TITULO_PT[name]:18s}{s['cor']:9s} "
                      + "; ".join(s["razoes"]))
+        if s.get("posicao"):
+            lines.append(" " * 20 + "posição: " + "; ".join(s["posicao"]))
     lines.append("")
     lines.append("  Triagem, não veredicto: VERMELHO = atenção crítica, "
                  "AMARELO = rever, CINZENTO = sem dados (não penaliza). "
-                 "Cores relativas usam a população de referência de "
-                 "data_full.csv (2026-09).")
+                 "P50 = mediana da base (data_full.csv, 565): P90 = pior/mais "
+                 "alto que 90% da base. Rendimento compara-se dentro da "
+                 "mesma base.")
     return "\n".join(lines)

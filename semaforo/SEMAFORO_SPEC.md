@@ -1,4 +1,4 @@
-# Semáforo v1.0.0
+# Semáforo v1.1.0
 
 Contract for the per-section triage colors over the package vectors.
 Reference implementation: `semaforo_features.py` (stdlib-only Python).
@@ -33,6 +33,24 @@ individual-income artifact, see the affordability spec), so classic absolute
 thresholds would mark most proponents red and triage nothing. Hence: a
 common negative residual is AMARELO; VERMELHO is reserved for the P90
 extreme.
+
+## Positioning against the base (v1.1.0)
+
+Beyond the color, every section carries `posicao`: the proponent's exact
+percentile per key metric, interpolated on full percentile grids frozen from
+the reference base (`population_grids.py`, GENERATED file: 21 points per
+metric, data_full.csv 2026-09-24). Income-derived metrics (income, DSTI,
+burden, effort, residual) are positioned **within the same `income_basis`
+subpopulation** (salary_net n=218, irs_gross n=332; ss_regular has no grid,
+n<30, so no position is shown). Rendered as a "posição:" line under each
+section in the SEMÁFORO block, e.g. "revolving 36% = P89". Validated against
+exact percentile-of-score recomputation: worst deviation 3.3 points over
+1,901 comparisons (grid step is 5). CINZENTO sections carry no positioning.
+
+Metrics positioned: SÍNTESE burden/DSTI/effort/residual; RENDIMENTO income
+and YoY; RESPONSABILIDADES total debt, installments, revolving share, new
+credits 12m; BANCA relationship age, credit openings 12m; DESPESAS level and
+volatility; EMPREGO tenure. DADOS and ADVERSOS stay categorical.
 
 ## Rules per section
 
