@@ -1,4 +1,4 @@
-# Semáforo v1.1.0
+# Semáforo v1.2.0
 
 Contract for the per-section triage colors over the package vectors.
 Reference implementation: `semaforo_features.py` (stdlib-only Python).
@@ -51,6 +51,32 @@ Metrics positioned: SÍNTESE burden/DSTI/effort/residual; RENDIMENTO income
 and YoY; RESPONSABILIDADES total debt, installments, revolving share, new
 credits 12m; BANCA relationship age, credit openings 12m; DESPESAS level and
 volatility; EMPREGO tenure. DADOS and ADVERSOS stay categorical.
+
+## Deep comparison against the base (v1.2.0)
+
+Four additions, all frozen in the generated `population_grids.py`:
+
+1. **Risk-direction marks**: every position at the risky extreme (P>=85 when
+   higher-is-worse, P<=15 when lower-is-worse) carries "[atenção]"; the
+   favourable extreme carries "[favorável]". `HIGH_IS_BAD` defines direction
+   per metric; the reader never needs to know it by heart.
+2. **Pares (peer groups)**: affordability metrics (burden, total debt,
+   expenses, residual) positioned within the proponent's income tercile
+   inside the same `income_basis` (6 cells, n=72-111 each), because the whole
+   base mixes realities. Rendered as the "Pares" line.
+3. **Vizinhos (nearest neighbours)**: the 20 most similar proponents in the
+   base (z-distance on income, age, total debt, expenses, within the same
+   basis; anonymous frozen matrix) with their outcomes: CRC default rate,
+   adverse-record rate, median residual. Rendered as the "Semelhantes" line.
+   Validated exactly against sklearn NearestNeighbors: 0 divergences (120
+   cases). NOT a prediction: descriptive outcomes of lookalikes.
+4. **Assinatura**: the top-3 metrics by distance from the base median
+   (|P-50| >= 25), with direction and tone: the person's comparative
+   signature, at the top of the SEMÁFORO block.
+
+Peer-cell percentiles validated against exact recomputation (max deviation
+3.6 points; grid step 5). Missing features (e.g. no age or no spend) mean no
+neighbours/peers line: absence never penalizes.
 
 ## Rules per section
 

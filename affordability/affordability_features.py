@@ -308,7 +308,8 @@ def render_full_report(profile, vectors=None):
     v = vectors or proponent_profile(profile)
     st = semaforo({k: v[k] for k in v if k != "semaforo"})
     parts = ["================ SEMÁFORO ================",
-             render_semaforo_text(st),
+             render_semaforo_text(st, {k: v[k] for k in v
+                                       if k != "semaforo"}),
              "================ SÍNTESE (AFFORDABILITY): "
              f"{st['sintese']['cor']} ================",
              render_profile_text(v["affordability"])]
