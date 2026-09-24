@@ -30,10 +30,12 @@ posição relativa. Grelhas, pares e vizinhos vêm de `population_grids.py`
 Stdlib only. Consumidor: affordability/render_full_report.
 """
 
-from population_grids import (GRID_POINTS, GRIDS, NEIGH_FEATURES, NEIGHBOURS,
-                              PEER_CUTS, PEER_GRIDS, PEER_N)
+from population_grids import (DEFAULT_PROXIMITY_GRIDS, DEFAULT_PROXIMITY_K,
+                              DEFAULT_PROXIMITY_STATS, GRID_POINTS, GRIDS,
+                              NEIGH_FEATURES, NEIGHBOURS, PEER_CUTS,
+                              PEER_GRIDS, PEER_N)
 
-FEATURES_VERSION = "1.2.0"
+FEATURES_VERSION = "1.3.0"
 
 # Benchmarks de cor (P75/P90 da base, congelados 2026-09-15): as REGRAS de
 # cor mantêm-se as da v1.0.0; o posicionamento é aditivo.
@@ -433,6 +435,46 @@ def vizinhos(vectors, k=K_VIZINHOS):
             "sobra_mediana": med_res, "basis": basis}
 
 
+def proximidade_defaults(vectors):
+    """Distância de semelhança entre o proponente e os incumpridores da base.
+
+    racio = dist. média aos 5 CUMPRIDORES mais parecidos / dist. média aos 5
+    INCUMPRIDORES mais parecidos (z-distância em rendimento, idade, dívida e
+    despesa, na mesma income_basis). > 1 = o perfil está mais próximo dos
+    incumpridores. O percentil vem da distribuição do rácio na própria base
+    (leave-one-out, congelada). SEMELHANÇA DE PERFIL, NÃO PROBABILIDADE."""
+    a, liab, e = (vectors["affordability"], vectors["liabilities"],
+                  vectors["expenses"])
+    basis = a["income_basis"]
+    ref = NEIGHBOURS.get(basis)
+    feats = {"monthly_income": a["monthly_income"], "age": e["age"],
+             "total_debt": liab["total_debt"],
+             "monthly_expenses": e["monthly_expenses"]}
+    if ref is None or any(feats[f] is None for f in NEIGH_FEATURES):
+        return None
+    z = [(feats[f] - ref["mean"][i]) / ref["std"][i]
+         for i, f in enumerate(NEIGH_FEATURES)]
+    d_def, d_ok = [], []
+    for j, row in enumerate(ref["rows"]):
+        dj = sum((z[i] - (row[i] - ref["mean"][i]) / ref["std"][i]) ** 2
+                 for i in range(len(NEIGH_FEATURES))) ** 0.5
+        if dj < 1e-9:
+            continue  # o próprio, quando pertence à base
+        (d_def if ref["in_default"][j] else d_ok).append(dj)
+    if len(d_def) < DEFAULT_PROXIMITY_K or len(d_ok) < DEFAULT_PROXIMITY_K:
+        return None
+    md = sum(sorted(d_def)[:DEFAULT_PROXIMITY_K]) / DEFAULT_PROXIMITY_K
+    mo = sum(sorted(d_ok)[:DEFAULT_PROXIMITY_K]) / DEFAULT_PROXIMITY_K
+    if md <= 0:
+        return None
+    racio = round(mo / md, 3)
+    p = percentile_rank(racio, basis, DEFAULT_PROXIMITY_GRIDS)
+    # SEM marca de risco deliberadamente: na base, o racio nao discrimina
+    # incumpridores (AUC 0.496; medianas iguais 0.65). E descritivo.
+    return {"racio": racio, "percentil": p, "basis": basis,
+            "n_defaulters": DEFAULT_PROXIMITY_STATS[basis]["n_defaulters"]}
+
+
 def assinatura(statuses, top=3):
     """As `top` métricas que mais afastam a pessoa da mediana da base."""
     entries = []
@@ -486,6 +528,9 @@ def semaforo_features(vectors):
     pr = pares(vectors)
     out["pares_grupo"] = pr["grupo"] if pr else None
     out["pares_posicao"] = "; ".join(pr["posicao"]) if pr else None
+    px = proximidade_defaults(vectors)
+    out["proximidade_defaults_racio"] = px["racio"] if px else None
+    out["proximidade_defaults_percentil"] = px["percentil"] if px else None
     vz = vizinhos(vectors)
     if vz:
         out["vizinhos_k"] = vz["k"]
@@ -537,10 +582,22 @@ def render_semaforo_text(statuses, vectors=None):
                          f"{vz['pct_incumprimento']}% em incumprimento; "
                          f"{vz['pct_adversos']}% com registos adversos; "
                          f"sobra mediana {sobra}")
+        px = proximidade_defaults(vectors)
+        if px:
+            lado = ("MAIS PRÓXIMO dos incumpridores do que dos cumpridores"
+                    if px["racio"] > 1 else
+                    "mais próximo dos cumpridores do que dos incumpridores")
+            lines.append(f"  Prox. defaults   rácio {px['racio']:.2f} ({lado}) "
+                         f"= P{px['percentil']} "
+                         f"({px['n_defaulters']} incumpridores na base "
+                         f"{px['basis']}; sem sinal medido: AUC 0.50 nesta "
+                         "base)")
     lines.append("")
     lines.append("  Triagem, não veredicto: VERMELHO = atenção crítica, "
                  "AMARELO = rever, CINZENTO = sem dados (não penaliza). "
                  "P50 = mediana da base (data_full.csv, 565); [atenção] / "
                  "[favorável] marcam extremos na direção do risco. "
-                 "Rendimento e rácios comparam-se dentro da mesma base.")
+                 "Rendimento e rácios comparam-se dentro da mesma base. "
+                 "Proximidade a incumpridores é semelhança de perfil, NÃO "
+                 "probabilidade de incumprimento.")
     return "\n".join(lines)

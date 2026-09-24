@@ -1,4 +1,4 @@
-# Semáforo v1.2.0
+# Semáforo v1.3.0
 
 Contract for the per-section triage colors over the package vectors.
 Reference implementation: `semaforo_features.py` (stdlib-only Python).
@@ -77,6 +77,20 @@ Four additions, all frozen in the generated `population_grids.py`:
 Peer-cell percentiles validated against exact recomputation (max deviation
 3.6 points; grid step 5). Missing features (e.g. no age or no spend) mean no
 neighbours/peers line: absence never penalizes.
+
+## Default-profile proximity (v1.3.0): descriptive only, by design
+
+`proximidade_defaults`: ratio of the mean z-distance to the 5 most similar
+NON-defaulters over the 5 most similar defaulters (same features and basis
+as the neighbours; leave-self-out). > 1 = closer to the defaulters' profile.
+Percentile from the ratio's own base distribution (frozen). **Measured
+signal: none**: AUC 0.496 against current default, identical medians (0.65)
+for defaulters and non-defaulters, consistent with the section-6 finding
+that capacity features do not separate defaulters in this data. It therefore
+ships with NO risk marks, and the rendered line discloses "sem sinal medido:
+AUC 0.50 nesta base". Kept as descriptive similarity at the product owner's
+request; revisit when outcome-rich, point-in-time data arrives. Validated
+exactly against numpy recomputation (147 cases, 0 divergences).
 
 ## Rules per section
 
